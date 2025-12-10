@@ -32,6 +32,35 @@
       padding: 0 20px;
     }
 
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    .controls input, .controls select, .controls button {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ff6600;
+      font-size: 1rem;
+      width: 80%;
+      background: #1a1a1a;
+      color: #ffffff;
+    }
+
+    .controls button {
+      background: #ff6600;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .controls button:hover {
+      background: #e55b00;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -55,6 +84,7 @@
       object-fit: cover;
       border-radius: 8px;
       margin-bottom: 10px;
+      cursor: pointer;
     }
 
     .replay-card input {
@@ -81,7 +111,7 @@
     .status-win { background: #28a745; }
     .status-lose { background: #dc3545; }
 
-    .replay-card a {
+    .replay-card a, .replay-card button {
       text-decoration: none;
       background: #ff6600;
       color: #000;
@@ -91,10 +121,11 @@
       display: block;
       margin: 5px 0;
       cursor: pointer;
+      border: none;
       transition: background 0.3s;
     }
 
-    .replay-card a:hover { background: #e55b00; }
+    .replay-card a:hover, .replay-card button:hover { background: #e55b00; }
 
     footer {
       text-align: center;
@@ -105,7 +136,6 @@
       margin-top: 30px;
     }
 
-    /* Кнопка музики */
     #toggleMusicBtn {
       position: fixed;
       bottom: 20px;
@@ -125,6 +155,17 @@
   </header>
 
   <main>
+    <div class="controls">
+      <input type="text" id="replayURL" placeholder="Посилання на Google Drive (для скачування)">
+      <input type="text" id="replayDesc" placeholder="Опис бою">
+      <input type="file" id="previewInput" accept="image/*">
+      <select id="replayStatus">
+        <option value="Перемога">Перемога 🏆</option>
+        <option value="Поразка">Поразка 💀</option>
+      </select>
+      <button id="addReplay">Додати реплей</button>
+    </div>
+
     <div class="grid" id="replayGrid"></div>
   </main>
 
@@ -133,16 +174,15 @@
   </footer>
 
   <!-- Музика -->
-  <audio id="bg-music" src="1727533981_linkin-park-the-emptiness-machine.mp3" loop autoplay></audio>
+  <audio id="bg-music" src="music.mp3" loop autoplay></audio>
   <button id="toggleMusicBtn">🎵 Вимкнути музику</button>
 
   <script>
+    // --- Музика ---
     const music = document.getElementById("bg-music");
     const btn = document.getElementById("toggleMusicBtn");
 
-    music.volume = 0.5; // регулює гучність
-
-    // Якщо браузер блокує autoplay
+    music.volume = 0.5;
     music.play().catch(() => {
       music.pause();
       btn.textContent = "🎵 Увімкнути музику";
@@ -158,10 +198,134 @@
       }
     });
 
-    // --- Сюди вставляй свій скрипт для реплеїв ---
+    // --- Реплеї ---
+    const replayURLInput = document.getElementById('replayURL');
+    const previewInput = document.getElementById('previewInput');
+    const replayDesc = document.getElementById('replayDesc');
+    const replayStatus = document.getElementById('replayStatus');
+    const addReplayBtn = document.getElementById('addReplay');
+    const replayGrid = document.getElementById('replayGrid');
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedReplays = JSON.parse(localStorage.getItem('wotReplays') || '[]');
+      savedReplays.forEach(data => addReplayCard(data));
+    });
+
+    addReplayBtn.addEventListener('click', () => {
+      const url = replayURLInput.value.trim();
+      if (!url) {
+        alert("Введіть посилання на Google Drive!");
+        return;
+      }
+
+      const driveIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (!driveIdMatch) {
+        alert("Некоректне посилання на Google Drive!");
+        return;
+      }
+
+      const downloadURL = `https://drive.google.com/uc?export=download&id=${driveIdMatch[1]}`;
+
+      if (previewInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          saveAndAddReplay({
+            url: downloadURL,
+            description: replayDesc.value || "Без опису",
+            status: replayStatus.value,
+            preview: e.target.result
+          });
+        };
+        reader.readAsDataURL(previewInput.files[0]);
+      } else {
+        saveAndAddReplay({
+          url: downloadURL,
+          description: replayDesc.value || "Без опису",
+          status: replayStatus.value,
+          preview: null
+        });
+      }
+
+      replayURLInput.value = '';
+      replayDesc.value = '';
+      previewInput.value = '';
+      replayStatus.value = "Перемога";
+    });
+
+    function saveAndAddReplay(data) {
+      const savedReplays = JSON.parse(localStorage.getItem('wotReplays') || '[]');
+      savedReplays.push(data);
+      localStorage.setItem('wotReplays', JSON.stringify(savedReplays));
+      addReplayCard(data);
+    }
+
+    function addReplayCard(data) {
+      const card = document.createElement('div');
+      card.className = 'replay-card';
+
+      const statusBadge = document.createElement('div');
+      statusBadge.className = 'status-badge ' + (data.status === "Перемога" ? "status-win" : "status-lose");
+      statusBadge.textContent = data.status;
+
+      const img = document.createElement('img');
+      img.src = data.preview || 'https://via.placeholder.com/300x150?text=WOT+Replay';
+      img.title = "Клікніть для зміни прев’ю";
+      img.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = e => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = ev => {
+            img.src = ev.target.result;
+            updateReplay(data.url, { preview: ev.target.result });
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      });
+
+      const descInput = document.createElement('input');
+      descInput.type = 'text';
+      descInput.value = data.description;
+      descInput.addEventListener('change', () => {
+        updateReplay(data.url, { description: descInput.value });
+      });
+
+      const downloadBtn = document.createElement('a');
+      downloadBtn.href = data.url;
+      downloadBtn.download = '';
+      downloadBtn.textContent = "Скачати";
+      downloadBtn.target = "_blank";
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = "Видалити";
+      deleteBtn.addEventListener('click', () => {
+        let savedReplays = JSON.parse(localStorage.getItem('wotReplays') || '[]');
+        savedReplays = savedReplays.filter(r => r.url !== data.url);
+        localStorage.setItem('wotReplays', JSON.stringify(savedReplays));
+        card.remove();
+      });
+
+      card.appendChild(statusBadge);
+      card.appendChild(img);
+      card.appendChild(descInput);
+      card.appendChild(downloadBtn);
+      card.appendChild(deleteBtn);
+
+      replayGrid.appendChild(card);
+    }
+
+    function updateReplay(url, updates) {
+      const savedReplays = JSON.parse(localStorage.getItem('wotReplays') || '[]');
+      const index = savedReplays.findIndex(r => r.url === url);
+      if (index !== -1) {
+        savedReplays[index] = { ...savedReplays[index], ...updates };
+        localStorage.setItem('wotReplays', JSON.stringify(savedReplays));
+      }
+    }
   </script>
 </body>
 </html>
-
-
-
